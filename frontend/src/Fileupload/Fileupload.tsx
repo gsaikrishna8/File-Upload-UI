@@ -67,6 +67,7 @@ const Fileupload: React.FunctionComponent<fileUploadProps> = ({
   const [newFilesCount, setNewFilesCount] = React.useState<number>(0);
   const [duplicateFile, setDuplicateFile] = React.useState<Array<string>>([]);
   const [warning, setWarning] = React.useState<boolean>(false);
+  const [fileUrl, setFileUrl] = React.useState<string | null>(null);
   const [fileProgress, setFilesProgress] = React.useState<any>({});
   const [successfullyUploaded, setSuccessfullyUploaded] = React.useState<
     Array<string>
@@ -99,7 +100,16 @@ const Fileupload: React.FunctionComponent<fileUploadProps> = ({
     fetchData();
   }, []);
   React.useEffect(() => {
-    setRows(fetchedData);
+    const flattenedData = fetchedData.map((item: any) => {
+      return {
+        ...item,
+        fileName: item.file.fileName,
+        fileType: item.file.fileType,
+        filePath: item.file.filePath,
+      };
+    });
+    setRows(flattenedData);
+    // console.log("fetchedData", fetchedData);
   }, [fetchedData]);
   console.log("rows", rows);
 
@@ -145,12 +155,13 @@ const Fileupload: React.FunctionComponent<fileUploadProps> = ({
     document.body.removeChild(a);
   };
   const handleDuplicateFiles = (file: any) => {
-    setDuplicateFile((prevFiles: any) => [...prevFiles, file.name]);
-
+    setDuplicateFile((prevFiles: any) => {
+      if (!prevFiles.includes(file.name)) {
+        return [...prevFiles, file.name];
+      }
+      return prevFiles;
+    });
     setWarning(true);
-    if(duplicateFile.length===0){
-      setFileUploaded(false)
-    }
   };
   console.log("duplicatefile", files);
 
@@ -175,10 +186,14 @@ const Fileupload: React.FunctionComponent<fileUploadProps> = ({
     if (duplicatedFiles.length > 0) {
       duplicatedFiles.forEach((d: any) => handleDuplicateFiles(d));
     }
-    if(uniqueFiles.length>0){
-      setFileUploaded(true)
-    } else{
-      setFileUploaded(false)
+
+    if (uniqueFiles.length === 0) {
+      setFileUploaded(false);
+    } else {
+      setFileUploaded(true);
+    }
+    if (inputRef.current) {
+      inputRef.current.value = "";
     }
     console.log("UNiqueeee", uniqueFiles.length > 0);
   };
@@ -201,10 +216,11 @@ const Fileupload: React.FunctionComponent<fileUploadProps> = ({
           await uploadData(file);
         }
         setMessage(
-          ` ${successfullyUploaded.length}file ${
+          ` ${successfullyUploaded.length}files ${
             successfullyUploaded.length > 1 ? "s" : ""
           } uploaded successfully ${successfullyUploaded.join(", ")}`
         );
+
         await fetchData();
       }
     } catch (error) {
@@ -218,13 +234,39 @@ const Fileupload: React.FunctionComponent<fileUploadProps> = ({
       setSuccessfullyUploaded([]);
     }
   };
+
   console.log("duplicateeed", duplicateFile);
+  const handleFileClick = async (fileId: any) => {
+    console.log("fileIDD", fileId);
+    try {
+      const response = await fetch(
+        `http://localhost:4000/api/routes/file/${fileId}`,
+        {
+          method: "POST",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Error: ${response.statusText}`);
+      }
+
+      const fileBlob = await response.blob();
+      const fileUrl = URL.createObjectURL(fileBlob);
+      setFileUrl(fileUrl);
+      window.open(fileUrl, "_blank");
+    } catch (error) {
+      console.error("Fetch File Error:", error);
+      // Handle error (e.g., display error message)
+    }
+  };
   const columns: GridColDef[] = [
     {
       field: "fileName",
       headerName: "Name",
       width: 450,
-      renderCell: (params) => <div>{params.row.file.fileName}</div>,
+      renderCell: (params) => {
+        return <div>{params.row.file.fileName}</div>;
+      },
 
       headerAlign: "left",
     },
@@ -239,18 +281,25 @@ const Fileupload: React.FunctionComponent<fileUploadProps> = ({
       field: "filePath",
       headerName: "File Path",
       width: 600,
-      renderCell: (params) => (
-        <a
-          href={params.row.file.filePath}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {params.row.file.fileName}{" "}
-        </a>
-        // <a href="#" onClick={event => handleDownload(event, item.row.path, item.row.name)}>
-        //     {item.row.name}
-        // </a>
-      ),
+      renderCell: (params: any) => {
+        const filePath = params.row.filePath;
+        // const encodedFilePath = encodeURI(params.row.filePath);
+        const fileId = params.row._id;
+        // console.log("filepath", filePath);
+        return (
+          <div>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                handleFileClick(fileId);
+              }}
+            >
+              {params.row.file.filePath}
+            </a>
+          </div>
+        );
+      },
       headerAlign: "left",
     },
   ];
@@ -333,7 +382,7 @@ const Fileupload: React.FunctionComponent<fileUploadProps> = ({
             </Button>
           </>
         </div>
-        <GridToolbarQuickFilter />
+        <GridToolbarQuickFilter debounceMs={500} />
       </GridToolbarContainer>
     );
   };
@@ -403,7 +452,10 @@ const Fileupload: React.FunctionComponent<fileUploadProps> = ({
       setSuccessfullyDeleted([]);
     }
   };
-
+  const handleMessageClose = () => {
+    setWarning(false);
+    setDuplicateFile([]);
+  };
   return (
     <div>
       <div className="uploadCard">
@@ -459,7 +511,7 @@ const Fileupload: React.FunctionComponent<fileUploadProps> = ({
                   className="subheading"
                   style={{ fontSize: "16px", color: "black" }}
                 >
-                  Limit 200MB per file .pdf, .jpeg, .jpg, .png, .docs, .ppt, .xlsx, .txt
+                  Limit 200MB per file .pdf, .jpeg, .jpg, .png
                 </div>
                 <input
                   type="file"

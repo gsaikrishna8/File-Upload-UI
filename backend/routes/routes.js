@@ -20,7 +20,6 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage: storage });
-
 router.post("/upload", upload.array("files"), async (req, res) => {
   try {
     const url = req.protocol + "://" + req.get("host");
@@ -30,7 +29,7 @@ router.post("/upload", upload.array("files"), async (req, res) => {
       return {
         file: {
           fileType: fileType,
-          filePath: url + "/" + file.filename,
+          filePath: url + "/" + file.originalname,
           fileName: file.originalname,
         },
       };
@@ -54,7 +53,28 @@ router.post("/getuploadlist", async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+router.post("/file/:id", async (req, res) => {
+  try {
+    const fileId = req.params.id;
+    const fileRecord = await user.findById(fileId);
 
+    if (!fileRecord || !fileRecord.file) {
+      return res.status(404).json({ message: "File not found" });
+    }
+
+    const { fileType, fileName, fileData } = fileRecord.file;
+
+    // Set headers to indicate the content type and disposition
+    res.set("Content-Type", fileType);
+    res.set("Content-Disposition", `inline; filename="${fileName}"`);
+
+    // Send the file data
+    res.send(fileData);
+  } catch (error) {
+    console.error("Get File Error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 router.post("/deletefile", async (req, res) => {
   try {
     console.log("Request Body:", req.body);
